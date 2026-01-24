@@ -31,13 +31,13 @@ function runFastplong() {
     echo "  [RUNNING] fastplong for: ${sampleName}..."
 
     # Run fastplong and capture exit code
-    if fastplong \
-        -i "${input}" \
-        -o "${out}/${sampleName}_trimmed.fastq.gz" \
-        --thread 4 \
-        "${adapterArgs[@]}" \
-        --html "${out}/${sampleName}_fastp.html" \
-        --json "${out}/${sampleName}_fastp.json" \
+    if fastplong \ 
+        -i "${input}" \ 
+        -o "${out}/${sampleName}_trimmed.fastq.gz" \ 
+        --thread 4 \ 
+        "${adapterArgs[@]}" \ 
+        --html "${out}/${sampleName}_fastp.html" \ 
+        --json "${out}/${sampleName}_fastp.json" \ 
         --report_title "${sampleName} fastp report"; then
         return 0
     else
@@ -88,22 +88,23 @@ function Fastplong() {
     fi
 
     # --- ADAPTER LOGIC ---
+    # Auto-detect PacBio HiFi from config file to skip adapter trimming
     local skipAdapter="false"
-    if [[ "${FORCE_ADAPTER_TRIM:-}" == "true" ]]; then
-        skipAdapter="false"
-        echo "Adapter trimming FORCED ON via FORCE_ADAPTER_TRIM" >&2
-    elif [[ "${SKIP_ADAPTER_TRIM:-}" == "true" ]]; then
-        skipAdapter="true"
-        echo "Adapter trimming FORCED OFF via SKIP_ADAPTER_TRIM" >&2
-    elif [[ -n "$configPath" ]] && [[ -f "$configPath" ]]; then
+    
+    if [[ -n "$configPath" ]] && [[ -f "$configPath" ]]; then
         local seqPlatform
         local minimapType
         seqPlatform=$(grep -E "^SEQ_PLATFORM=" "$configPath" | tail -n1 | cut -d= -f2 | tr '[:lower:]' '[:upper:]')
         minimapType=$(grep -E "^MINIMAP2_READ_TYPE=" "$configPath" | tail -n1 | cut -d= -f2 | tr '[:lower:]' '[:upper:]')
+        
         if [[ "$seqPlatform" == "PACBIO" ]] && [[ "$minimapType" =~ HIFI ]]; then
             skipAdapter="true"
             echo "Auto-detected PacBio HiFi - skipping adapter trimming" >&2
+        else
+            echo "Adapter trimming enabled" >&2
         fi
+    else
+        echo "No config file provided - adapter trimming enabled by default" >&2
     fi
 
     echo "skipAdapter = $skipAdapter" >&2
@@ -114,7 +115,7 @@ function Fastplong() {
         shift
         local files=("$@")
 
-        [[ "+#files[@]" -eq 0 ]] && return
+        [[ \\${#files[@]} -eq 0 ]] && return
 
         # 1. CHECKPOINT CHECK
         if [[ -n "${completedSamples[$sampleName]}" ]]; then
@@ -189,7 +190,7 @@ function Fastplong() {
         if [[ "$line" =~ \\.fastq|fq\\.gz$ ]]; then
             sampleFiles+=("$line")
         else
-            if [[ -n "$currentSample" ]] && [[ "+#sampleFiles[@]" -gt 0 ]]; then
+            if [[ -n "$currentSample" ]] && [[ \\${#sampleFiles[@]} -gt 0 ]]; then
                 if ! process_sample_direct "$currentSample" "${sampleFiles[@]}"; then
                     failedSamples+=("$currentSample")
                 fi
@@ -200,7 +201,7 @@ function Fastplong() {
     done < "${sampleList}"
     
     # Process the last sample
-    if [[ -n "$currentSample" ]] && [[ "+#sampleFiles[@]" -gt 0 ]]; then
+    if [[ -n "$currentSample" ]] && [[ \\${#sampleFiles[@]} -gt 0 ]]; then
         if ! process_sample_direct "$currentSample" "${sampleFiles[@]}"; then
             failedSamples+=("$currentSample")
         fi
@@ -232,7 +233,7 @@ function Fastplong() {
     echo "Checkpoint:  ${checkpointFile}"
     echo "Total completed: $(wc -l < "${checkpointFile}") samples"
     
-    if [[ "+#failedSamples[@]" -gt 0 ]]; then
+    if [[ \\${#failedSamples[@]} -gt 0 ]]; then
         echo ""
         echo "WARNING: ${#failedSamples[@]} sample(s) failed:"
         printf '  - %s\n' "${failedSamples[@]}"
